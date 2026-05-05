@@ -67,8 +67,10 @@ filters:
 
 download:
   max_attempts_per_run: 5
-  js_runtimes: deno
-  format: "bv*[height<=1080]+ba/b[height<=1080]/b"
+  js_runtimes: node
+  remote_components: ejs:npm
+  # Prefer one-file progressive MP4 formats to avoid merge/ffmpeg issues on runners.
+  format: "b[height<=720][ext=mp4]/b[height<=480][ext=mp4]/18/b"
   subtitle_languages:
     - en
     - zh-Hans

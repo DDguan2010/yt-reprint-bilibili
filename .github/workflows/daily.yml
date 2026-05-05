@@ -45,10 +45,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Setup Deno for yt-dlp
-        uses: denoland/setup-deno@v2
+      - name: Setup Node for yt-dlp
+        uses: actions/setup-node@v4
         with:
-          deno-version: v2.x
+          node-version: "24"
 
       - name: Install uploader CLI
         run: |
