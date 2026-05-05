@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from common import fail_with_log, load_config, root_path, write_json
+from common import fail_with_log, load_config, root_path, run_command, write_json
 
 
 AUTH_COOKIE_NAMES = {
@@ -52,6 +52,33 @@ def main() -> None:
     print(f"YouTube auth cookie names found: {', '.join(found) if found else 'none'}")
     if not found:
         fail_with_log(config, "YouTube cookie file does not contain login cookies", payload)
+
+    download_cfg = config.get("download", {})
+    probe_url = runtime.get("youtube_cookie_probe_url")
+    if probe_url:
+        result = run_command(
+            [
+                "yt-dlp",
+                "--simulate",
+                "--no-playlist",
+                "--cookies",
+                str(cookie_file),
+                "--js-runtimes",
+                str(download_cfg.get("js_runtimes", "node")),
+                "--remote-components",
+                str(download_cfg.get("remote_components", "ejs:npm")),
+                "--extractor-args",
+                str(download_cfg.get("extractor_args", "youtube:player_client=tv,web")),
+                probe_url,
+            ]
+        )
+        if result.returncode != 0:
+            fail_with_log(
+                config,
+                "YouTube cookie file exists but was rejected by YouTube",
+                {**payload, "probe_output": result.stdout[-4000:]},
+            )
+        print("YouTube cookie live probe passed")
 
 
 if __name__ == "__main__":

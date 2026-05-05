@@ -69,6 +69,7 @@ download:
   max_attempts_per_run: 5
   js_runtimes: node
   remote_components: ejs:npm
+  extractor_args: "youtube:player_client=tv,web"
   # Prefer one-file progressive MP4 formats to avoid merge/ffmpeg issues on runners.
   format: "b[height<=720][ext=mp4]/b[height<=480][ext=mp4]/18/b"
   subtitle_languages:
@@ -81,6 +82,7 @@ runtime:
   work_dir: downloads
   cookie_file: cookies.json
   youtube_cookie_file: youtube-cookies.txt
+  youtube_cookie_probe_url: "https://www.youtube.com/watch?v=sV-Z1LrR6MU"
   candidates_file: data/candidates.json
   selected_file: data/selected.json
   posted_file: data/posted.json

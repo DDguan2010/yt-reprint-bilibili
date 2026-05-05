@@ -39,6 +39,8 @@ def main() -> None:
             str(download_cfg.get("js_runtimes", "deno")),
             "--remote-components",
             str(download_cfg.get("remote_components", "ejs:npm")),
+            "--extractor-args",
+            str(download_cfg.get("extractor_args", "youtube:player_client=tv,web")),
             "--retries",
             "10",
             "--fragment-retries",
