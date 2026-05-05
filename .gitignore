@@ -5,6 +5,9 @@ __pycache__/
 
 cookies.json
 youtube-cookies.txt
+qrcode.png
+download.log
+ds_update.log
 downloads/*
 !downloads/.gitkeep
 
