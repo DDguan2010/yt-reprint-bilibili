@@ -1,4 +1,4 @@
-name: Daily Authorized Video Sync
+name: Bloxd.io Daily Video Sync
 
 on:
   schedule:
@@ -6,8 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       keyword:
-        description: "Optional keyword override"
+        description: "Optional keyword override; leave empty to use config.yml bloxd.io keywords"
         required: false
+        default: ""
         type: string
       dry_run:
         description: "Search, select, download, and prepare upload command only"
