@@ -1,0 +1,85 @@
+bilibili:
+  # Bilibili partition id. 17 is commonly used for stand-alone games.
+  # Change it if your target account uses another game-related partition.
+  tid: 17
+  # 2 means repost. Keep the original source URL in source/description.
+  copyright: 2
+  no_reprint: 1
+  title_template: "{title}"
+  desc_template: |
+    原视频链接：{url}
+    原作者：{channel}
+    原发布时间：{upload_date}
+    搜索关键词：{keyword}
+
+    本内容用于 bloxd.io 游戏视频同步展示，请遵守原作者许可与平台规则。
+  default_tags:
+    - bloxd.io
+    - Bloxd
+    - 网页游戏
+    - 沙盒游戏
+    - 游戏视频
+  # The default uploader is the biliup CLI. If the CLI changes, adjust this
+  # template without editing scripts. Available placeholders:
+  # {cookie_file}, {video_file}, {title}, {desc_file}, {source}, {tid}, {tags}, {cover_file}
+  upload_command_template: >-
+    biliup -u {cookie_file} upload {video_file}
+    --copyright {copyright}
+    --source {source}
+    --tid {tid}
+    --title {title}
+    --desc-file {desc_file}
+    --tag {tags}
+
+search:
+  max_uploads_per_run: 1
+  max_candidates_per_keyword: 12
+  keywords:
+    - "bloxd.io gameplay"
+    - "bloxd.io update"
+    - "bloxd.io tips"
+    - "bloxd.io survival"
+    - "bloxd.io bedwars"
+    - "bloxd.io funny moments"
+    - "bloxd.io best moments"
+
+filters:
+  min_duration_seconds: 60
+  max_duration_seconds: 1200
+  min_view_count: 300
+  published_within_days: 10
+  # Only YouTube Data API exposes license reliably. yt-dlp search fallback may
+  # not return license metadata, so CC filtering can skip otherwise valid videos.
+  require_creative_commons: false
+  blocked_words:
+    - "full movie"
+    - "music video"
+    - "unauthorized upload"
+    - "hack"
+    - "hacks"
+    - "cheat"
+    - "cheats"
+    - "mod menu"
+    - "free account"
+    - "giveaway"
+  channel_allowlist: []
+  channel_blocklist: []
+
+download:
+  format: "bv*[height<=1080]+ba/b[height<=1080]/b"
+  subtitle_languages:
+    - en
+    - zh-Hans
+  write_thumbnail: true
+  merge_output_format: mp4
+
+runtime:
+  work_dir: downloads
+  cookie_file: cookies.json
+  youtube_cookie_file: youtube-cookies.txt
+  candidates_file: data/candidates.json
+  selected_file: data/selected.json
+  posted_file: data/posted.json
+  archive_file: data/download-archive.txt
+  latest_log_file: logs/latest.json
+  upload_result_file: data/upload-result.json

@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+cookies.json
+youtube-cookies.txt
+downloads/*
+!downloads/.gitkeep
+
+logs/*.json
+!logs/.gitkeep
+data/candidates.json
+data/selected.json
+data/upload-result.json
