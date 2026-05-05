@@ -71,8 +71,8 @@ download:
   js_runtimes: node
   remote_components: ejs:npm
   extractor_args: "youtube:player_client=tv,web"
-  # Prefer one-file progressive MP4 formats to avoid merge/ffmpeg issues on runners.
-  format: "b[height<=720][ext=mp4]/b[height<=480][ext=mp4]/18/b"
+  # Download the best available video and audio, then merge with ffmpeg.
+  format: "bv*+ba/b"
   subtitle_languages:
     - en
     - zh-Hans
