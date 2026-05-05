@@ -35,6 +35,8 @@ def main() -> None:
             "--no-playlist",
             "--download-archive",
             str(archive_file),
+            "--js-runtimes",
+            str(download_cfg.get("js_runtimes", "deno")),
             "-f",
             str(download_cfg.get("format", "bv*+ba/b")),
             "--merge-output-format",

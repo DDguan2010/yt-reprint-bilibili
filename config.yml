@@ -67,6 +67,7 @@ filters:
 
 download:
   max_attempts_per_run: 5
+  js_runtimes: deno
   format: "bv*[height<=1080]+ba/b[height<=1080]/b"
   subtitle_languages:
     - en
