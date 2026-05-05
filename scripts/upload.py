@@ -7,6 +7,23 @@ from pathlib import Path
 from common import fail_with_log, load_config, read_json, root_path, run_command, sanitize_text, write_json, write_text
 
 
+def prepare_cover(cover_file: str) -> str:
+    if not cover_file:
+        return ""
+    cover_path = Path(cover_file)
+    if not cover_path.exists():
+        return ""
+    if cover_path.suffix.lower() in {".jpg", ".jpeg", ".png"}:
+        return str(cover_path)
+
+    from PIL import Image
+
+    jpg_path = cover_path.with_suffix(".jpg")
+    with Image.open(cover_path) as image:
+        image.convert("RGB").save(jpg_path, "JPEG", quality=95)
+    return str(jpg_path)
+
+
 def render_template(template: str, item: dict) -> str:
     values = {
         "id": item.get("id", ""),
@@ -20,7 +37,9 @@ def render_template(template: str, item: dict) -> str:
 
 
 def build_command(template: str, values: dict[str, str]) -> list[str]:
-    rendered = template.format(**{key: shlex.quote(str(value)) for key, value in values.items()})
+    rendered = template.format(
+        **{key: str(value) if key.endswith("_arg") else shlex.quote(str(value)) for key, value in values.items()}
+    )
     return shlex.split(rendered)
 
 
@@ -48,11 +67,13 @@ def main() -> None:
         desc_file = video_file.parent / "bilibili-desc.txt"
         write_text(desc_file, desc)
         tags = ",".join(str(tag) for tag in bili_cfg.get("default_tags", []) if str(tag).strip())
+        cover_file = prepare_cover(str(item.get("cover_file", "")))
 
         values = {
             "cookie_file": str(cookie_file),
             "video_file": str(video_file),
-            "cover_file": str(item.get("cover_file", "")),
+            "cover_file": cover_file,
+            "cover_arg": f"--cover {shlex.quote(cover_file)}" if cover_file else "",
             "title": title,
             "desc": desc,
             "desc_file": str(desc_file),

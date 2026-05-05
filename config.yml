@@ -30,6 +30,7 @@ bilibili:
     --title {title}
     --desc {desc}
     --tag {tags}
+    {cover_arg}
 
 search:
   max_uploads_per_run: 1
