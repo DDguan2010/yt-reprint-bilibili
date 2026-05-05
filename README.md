@@ -20,7 +20,7 @@
 config.yml                    主配置文件
 requirements.txt              Python 依赖
 scripts/search.py             搜索候选视频
-scripts/select.py             筛选和排序
+scripts/choose.py             筛选和排序
 scripts/download.py           下载视频、封面、字幕和元数据
 scripts/upload.py             调用 biliup 投稿
 scripts/update_state.py       更新 data/posted.json
@@ -135,7 +135,7 @@ python -m venv .venv
 .venv\Scripts\activate
 python -m pip install -r requirements.txt
 python scripts/search.py
-python scripts/select.py
+python scripts/choose.py
 python scripts/download.py
 set DRY_RUN=true
 python scripts/upload.py

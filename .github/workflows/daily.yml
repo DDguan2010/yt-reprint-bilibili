@@ -77,7 +77,7 @@ jobs:
         run: python scripts/search.py
 
       - name: Select candidate
-        run: python scripts/select.py
+        run: python scripts/choose.py
 
       - name: Download media
         run: python scripts/download.py
