@@ -66,6 +66,7 @@ filters:
   channel_blocklist: []
 
 download:
+  max_attempts_per_run: 5
   format: "bv*[height<=1080]+ba/b[height<=1080]/b"
   subtitle_languages:
     - en

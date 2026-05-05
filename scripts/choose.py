@@ -99,12 +99,13 @@ def main() -> None:
 
     allowed.sort(key=lambda item: item.get("score", 0), reverse=True)
     max_uploads = int(config.get("search", {}).get("max_uploads_per_run", 1))
-    selected = allowed[:max_uploads]
+    max_attempts = max(max_uploads, int(config.get("download", {}).get("max_attempts_per_run", max_uploads)))
+    selected = allowed[:max_attempts]
     write_json(runtime.get("selected_file", "data/selected.json"), selected)
     write_json(runtime.get("latest_log_file", "logs/latest.json"), {"ok": True, "stage": "select", "selected": selected, "rejected": rejected})
     if not selected:
         fail_with_log(config, "No candidate passed filters", {"rejected": rejected[:20]})
-    print(f"Selected {len(selected)} video(s)")
+    print(f"Selected {len(selected)} candidate(s) for up to {max_uploads} upload(s)")
 
 
 if __name__ == "__main__":

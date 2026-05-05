@@ -20,7 +20,11 @@ def main() -> None:
     youtube_cookie_file = root_path(runtime.get("youtube_cookie_file", "youtube-cookies.txt"))
 
     downloaded: list[dict] = []
+    failures: list[dict] = []
+    max_uploads = int(config.get("search", {}).get("max_uploads_per_run", 1))
     for item in selected:
+        if len(downloaded) >= max_uploads:
+            break
         video_id = item["id"]
         video_dir = work_dir / video_id
         video_dir.mkdir(parents=True, exist_ok=True)
@@ -50,7 +54,10 @@ def main() -> None:
 
         result = run_command(args)
         if result.returncode != 0:
-            fail_with_log(config, f"yt-dlp failed for {video_id}", {"output": result.stdout[-4000:]})
+            print(f"yt-dlp failed for {video_id}; trying next candidate")
+            print(result.stdout[-4000:])
+            failures.append({"id": video_id, "title": item.get("title"), "output": result.stdout[-4000:]})
+            continue
 
         video_files = sorted(
             [path for path in video_dir.iterdir() if path.is_file() and path.suffix.lower() in {".mp4", ".mkv", ".webm", ".mov"}],
@@ -58,7 +65,9 @@ def main() -> None:
             reverse=True,
         )
         if not video_files:
-            fail_with_log(config, f"No downloaded video file found for {video_id}")
+            print(f"No downloaded video file found for {video_id}; trying next candidate")
+            failures.append({"id": video_id, "title": item.get("title"), "output": "no downloaded video file"})
+            continue
 
         cover_files = sorted(
             [path for path in video_dir.iterdir() if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}],
@@ -69,8 +78,11 @@ def main() -> None:
         item["cover_file"] = str(cover_files[0]) if cover_files else ""
         downloaded.append(item)
 
+    if not downloaded:
+        fail_with_log(config, "No selected candidates could be downloaded", {"failures": failures})
+
     write_json(runtime.get("selected_file", "data/selected.json"), downloaded)
-    write_json(runtime.get("latest_log_file", "logs/latest.json"), {"ok": True, "stage": "download", "downloaded": downloaded})
+    write_json(runtime.get("latest_log_file", "logs/latest.json"), {"ok": True, "stage": "download", "downloaded": downloaded, "failures": failures})
     print(f"Downloaded {len(downloaded)} video(s)")
 
 
