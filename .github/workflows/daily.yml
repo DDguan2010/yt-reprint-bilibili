@@ -70,10 +70,16 @@ jobs:
       - name: Restore optional YouTube login file
         env:
           YOUTUBE_COOKIES_TXT: ${{ secrets.YOUTUBE_COOKIES_TXT }}
+          YOUTUBE_COOKIES_B64: ${{ secrets.YOUTUBE_COOKIES_B64 }}
         run: |
-          if [ -n "$YOUTUBE_COOKIES_TXT" ]; then
+          if [ -n "$YOUTUBE_COOKIES_B64" ]; then
+            printf '%s' "$YOUTUBE_COOKIES_B64" | base64 -d > youtube-cookies.txt
+          elif [ -n "$YOUTUBE_COOKIES_TXT" ]; then
             printf '%s' "$YOUTUBE_COOKIES_TXT" > youtube-cookies.txt
           fi
+
+      - name: Validate YouTube login file
+        run: python scripts/validate_youtube_cookies.py
 
       - name: Search candidates
         env:
