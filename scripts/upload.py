@@ -54,6 +54,7 @@ def main() -> None:
             "video_file": str(video_file),
             "cover_file": str(item.get("cover_file", "")),
             "title": title,
+            "desc": desc,
             "desc_file": str(desc_file),
             "source": str(item.get("url", "")),
             "tid": str(bili_cfg.get("tid", 171)),

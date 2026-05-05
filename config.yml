@@ -21,14 +21,14 @@ bilibili:
     - 游戏视频
   # The default uploader is the biliup CLI. If the CLI changes, adjust this
   # template without editing scripts. Available placeholders:
-  # {cookie_file}, {video_file}, {title}, {desc_file}, {source}, {tid}, {tags}, {cover_file}
+  # {cookie_file}, {video_file}, {title}, {desc}, {source}, {tid}, {tags}, {cover_file}
   upload_command_template: >-
     biliup -u {cookie_file} upload {video_file}
     --copyright {copyright}
     --source {source}
     --tid {tid}
     --title {title}
-    --desc-file {desc_file}
+    --desc {desc}
     --tag {tags}
 
 search:

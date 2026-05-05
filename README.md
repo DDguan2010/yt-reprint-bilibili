@@ -168,7 +168,7 @@ bilibili:
     --source {source}
     --tid {tid}
     --title {title}
-    --desc-file {desc_file}
+    --desc {desc}
     --tag {tags}
 ```
 
