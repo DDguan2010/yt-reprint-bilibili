@@ -1,8 +1,134 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
+from urllib.parse import urlparse
+
+import requests
 
 from common import fail_with_log, load_config, read_json, root_path, run_command, write_json
+
+
+def parse_resolution(value: str | None) -> int:
+    if not value:
+        return 0
+    match = re.search(r"(\d+)\s*x\s*(\d+)", str(value))
+    if match:
+        return int(match.group(1)) * int(match.group(2))
+    match = re.search(r"(\d+)p", str(value).lower())
+    if match:
+        return int(match.group(1))
+    return 0
+
+
+def suffix_from_url(url: str, default: str) -> str:
+    suffix = Path(urlparse(url).path).suffix.lower()
+    if suffix in {".mp4", ".mkv", ".webm", ".mov", ".jpg", ".jpeg", ".png", ".webp"}:
+        return suffix
+    return default
+
+
+def download_url(url: str, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with requests.get(url, stream=True, timeout=60) as response:
+        response.raise_for_status()
+        with target.open("wb") as fh:
+            for chunk in response.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    fh.write(chunk)
+
+
+def ytdown_download(item: dict, video_dir: Path, api_url: str) -> dict:
+    response = requests.post(api_url, data={"url": item["url"]}, timeout=90)
+    response.raise_for_status()
+    payload = response.json()
+    api = payload.get("api", {})
+    if api.get("status") != "ok":
+        raise RuntimeError(f"ytdown returned status {api.get('status')}: {api.get('message')}")
+
+    media_items = api.get("mediaItems", []) or []
+    videos = [media for media in media_items if str(media.get("type", "")).lower() == "video" and media.get("mediaUrl")]
+    if not videos:
+        raise RuntimeError("ytdown returned no video media items")
+    best = max(videos, key=lambda media: parse_resolution(media.get("mediaRes") or media.get("mediaQuality")))
+
+    video_suffix = suffix_from_url(best["mediaUrl"], ".mp4")
+    video_file = video_dir / f"{item['id']}{video_suffix}"
+    download_url(best["mediaUrl"], video_file)
+    if not video_file.exists() or video_file.stat().st_size == 0:
+        raise RuntimeError("ytdown video download produced an empty file")
+
+    thumbnail_url = best.get("mediaThumbnail") or api.get("imagePreviewUrl")
+    cover_file = ""
+    if thumbnail_url:
+        cover_suffix = suffix_from_url(thumbnail_url, ".jpg")
+        cover_path = video_dir / f"{item['id']}{cover_suffix}"
+        download_url(thumbnail_url, cover_path)
+        cover_file = str(cover_path)
+
+    item["video_file"] = str(video_file)
+    item["cover_file"] = cover_file
+    item["download_method"] = "ytdown"
+    item["download_quality"] = best.get("mediaQuality") or best.get("mediaRes") or ""
+    return item
+
+
+def ytdlp_download(item: dict, video_dir: Path, config: dict, archive_file: Path, youtube_cookie_file: Path) -> dict:
+    download_cfg = config.get("download", {})
+    output_template = str(video_dir / "%(id)s.%(ext)s")
+    args = [
+        "yt-dlp",
+        "--no-playlist",
+        "--download-archive",
+        str(archive_file),
+        "--js-runtimes",
+        str(download_cfg.get("js_runtimes", "node")),
+        "--remote-components",
+        str(download_cfg.get("remote_components", "ejs:npm")),
+        "--extractor-args",
+        str(download_cfg.get("extractor_args", "youtube:player_client=tv,web")),
+        "--retries",
+        "10",
+        "--fragment-retries",
+        "10",
+        "-f",
+        str(download_cfg.get("format", "bv*+ba/b")),
+        "--merge-output-format",
+        str(download_cfg.get("merge_output_format", "mp4")),
+        "--write-info-json",
+        "-o",
+        output_template,
+    ]
+    if download_cfg.get("write_thumbnail", True):
+        args.append("--write-thumbnail")
+    subtitle_languages = download_cfg.get("subtitle_languages", []) or []
+    if subtitle_languages:
+        args.extend(["--write-subs", "--write-auto-subs", "--sub-langs", ",".join(subtitle_languages)])
+    if youtube_cookie_file.exists():
+        args.extend(["--cookies", str(youtube_cookie_file)])
+    args.append(item["url"])
+
+    result = run_command(args)
+    if result.returncode != 0:
+        raise RuntimeError(result.stdout[-4000:])
+
+    video_files = sorted(
+        [path for path in video_dir.iterdir() if path.is_file() and path.suffix.lower() in {".mp4", ".mkv", ".webm", ".mov"}],
+        key=lambda path: path.stat().st_size,
+        reverse=True,
+    )
+    if not video_files:
+        raise RuntimeError("yt-dlp produced no video file")
+
+    cover_files = sorted(
+        [path for path in video_dir.iterdir() if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}],
+        key=lambda path: path.stat().st_size,
+        reverse=True,
+    )
+    item["video_file"] = str(video_files[0])
+    item["cover_file"] = str(cover_files[0]) if cover_files else ""
+    item["download_method"] = "yt-dlp"
+    return item
 
 
 def main() -> None:
@@ -18,6 +144,8 @@ def main() -> None:
     archive_file = root_path(runtime.get("archive_file", "data/download-archive.txt"))
     archive_file.parent.mkdir(parents=True, exist_ok=True)
     youtube_cookie_file = root_path(runtime.get("youtube_cookie_file", "youtube-cookies.txt"))
+    ytdown_api_url = str(download_cfg.get("ytdown_api_url", "https://app.ytdown.to/proxy.php"))
+    preferred_method = str(download_cfg.get("preferred_method", "ytdown"))
 
     downloaded: list[dict] = []
     failures: list[dict] = []
@@ -28,65 +156,22 @@ def main() -> None:
         video_id = item["id"]
         video_dir = work_dir / video_id
         video_dir.mkdir(parents=True, exist_ok=True)
-        output_template = str(video_dir / "%(id)s.%(ext)s")
-
-        args = [
-            "yt-dlp",
-            "--no-playlist",
-            "--download-archive",
-            str(archive_file),
-            "--js-runtimes",
-            str(download_cfg.get("js_runtimes", "deno")),
-            "--remote-components",
-            str(download_cfg.get("remote_components", "ejs:npm")),
-            "--extractor-args",
-            str(download_cfg.get("extractor_args", "youtube:player_client=tv,web")),
-            "--retries",
-            "10",
-            "--fragment-retries",
-            "10",
-            "-f",
-            str(download_cfg.get("format", "bv*+ba/b")),
-            "--merge-output-format",
-            str(download_cfg.get("merge_output_format", "mp4")),
-            "--write-info-json",
-            "-o",
-            output_template,
-        ]
-        if download_cfg.get("write_thumbnail", True):
-            args.append("--write-thumbnail")
-        subtitle_languages = download_cfg.get("subtitle_languages", []) or []
-        if subtitle_languages:
-            args.extend(["--write-subs", "--write-auto-subs", "--sub-langs", ",".join(subtitle_languages)])
-        if youtube_cookie_file.exists():
-            args.extend(["--cookies", str(youtube_cookie_file)])
-        args.append(item["url"])
-
-        result = run_command(args)
-        if result.returncode != 0:
-            print(f"yt-dlp failed for {video_id}; trying next candidate")
-            print(result.stdout[-4000:])
-            failures.append({"id": video_id, "title": item.get("title"), "output": result.stdout[-4000:]})
-            continue
-
-        video_files = sorted(
-            [path for path in video_dir.iterdir() if path.is_file() and path.suffix.lower() in {".mp4", ".mkv", ".webm", ".mov"}],
-            key=lambda path: path.stat().st_size,
-            reverse=True,
-        )
-        if not video_files:
-            print(f"No downloaded video file found for {video_id}; trying next candidate")
-            failures.append({"id": video_id, "title": item.get("title"), "output": "no downloaded video file"})
-            continue
-
-        cover_files = sorted(
-            [path for path in video_dir.iterdir() if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}],
-            key=lambda path: path.stat().st_size,
-            reverse=True,
-        )
-        item["video_file"] = str(video_files[0])
-        item["cover_file"] = str(cover_files[0]) if cover_files else ""
-        downloaded.append(item)
+        errors: list[str] = []
+        methods = ["ytdown", "yt-dlp"] if preferred_method == "ytdown" else ["yt-dlp", "ytdown"]
+        for method in methods:
+            try:
+                if method == "ytdown":
+                    item = ytdown_download(item, video_dir, ytdown_api_url)
+                else:
+                    item = ytdlp_download(item, video_dir, config, archive_file, youtube_cookie_file)
+                downloaded.append(item)
+                break
+            except Exception as exc:  # noqa: BLE001
+                message = f"{method} failed for {video_id}: {exc}"
+                print(message)
+                errors.append(message[-4000:])
+        else:
+            failures.append({"id": video_id, "title": item.get("title"), "output": "\n".join(errors)})
 
     if not downloaded:
         fail_with_log(config, "No selected candidates could be downloaded", {"failures": failures})

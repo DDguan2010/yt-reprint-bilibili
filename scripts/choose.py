@@ -32,6 +32,8 @@ def is_allowed(candidate: dict[str, Any], config: dict[str, Any], posted_ids: se
         return False, "missing video id"
     if video_id in posted_ids:
         return False, "already posted"
+    if "bloxd" not in title.lower() and "bloxd" not in channel.lower():
+        return False, "not bloxd related"
     if duration is None:
         return False, "missing duration"
     if int(duration) < int(filters.get("min_duration_seconds", 0)):
@@ -72,13 +74,17 @@ def is_allowed(candidate: dict[str, Any], config: dict[str, Any], posted_ids: se
 
 def score(candidate: dict[str, Any]) -> float:
     upload_date = parse_upload_date(candidate.get("upload_date"))
-    age_penalty = 0
+    freshness_score = 25
     if upload_date:
-        age_penalty = max(0, (datetime.now(timezone.utc) - upload_date).days) * 5
+        age_days = max(0, (datetime.now(timezone.utc) - upload_date).days)
+        freshness_score = max(0, 40 - age_days * 2)
     duration = int(candidate.get("duration") or 0)
     duration_penalty = abs(duration - 720) / 120
-    view_score = min(int(candidate.get("view_count") or 0), 100000) / 1000
-    return view_score - age_penalty - duration_penalty
+    view_count = int(candidate.get("view_count") or 0)
+    view_score = min(view_count, 200000) / 4000
+    title = str(candidate.get("title") or "").lower()
+    relevance_score = 20 if "bloxd.io" in title else 10
+    return relevance_score + freshness_score + view_score - duration_penalty
 
 
 def main() -> None:

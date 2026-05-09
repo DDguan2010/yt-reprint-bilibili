@@ -1,8 +1,8 @@
 name: Bloxd.io Daily Video Sync
 
 on:
-  #schedule:
-    #- cron: "0 * * * *"
+  schedule:
+    - cron: "0 * * * *"
   workflow_dispatch:
     inputs:
       keyword:
@@ -82,9 +82,6 @@ jobs:
           elif [ -n "$YOUTUBE_COOKIES_TXT" ]; then
             printf '%s' "$YOUTUBE_COOKIES_TXT" > youtube-cookies.txt
           fi
-
-      - name: Validate YouTube login file
-        run: python scripts/validate_youtube_cookies.py
 
       - name: Search candidates
         env:

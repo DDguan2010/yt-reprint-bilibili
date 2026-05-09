@@ -80,38 +80,41 @@ def youtube_api_search(keyword: str, api_key: str, max_results: int) -> list[dic
 def ytdlp_search(keyword: str, max_results: int, config: dict[str, Any]) -> list[dict[str, Any]]:
     import json
 
-    query = f"ytsearch{max_results}:{keyword}"
+    queries = [f"ytsearch{max_results}:{keyword}", f"ytsearchdate{max_results}:{keyword}"]
     args = ["yt-dlp", "--ignore-errors", "--flat-playlist", "--dump-json", "--skip-download"]
     youtube_cookie_file = root_path(config.get("runtime", {}).get("youtube_cookie_file", "youtube-cookies.txt"))
     if youtube_cookie_file.exists():
         args.extend(["--cookies", str(youtube_cookie_file)])
-    args.append(query)
-    result = run_command(args)
+    results = [run_command([*args, query]) for query in queries]
 
     candidates: list[dict[str, Any]] = []
-    for line in result.stdout.splitlines():
-        if not line.strip().startswith("{"):
-            continue
-        item = json.loads(line)
-        video_id = item.get("id") or video_id_from_url(item.get("webpage_url", ""))
-        if not video_id:
-            continue
-        candidates.append(
-            {
-                "id": video_id,
-                "url": item.get("webpage_url") or f"https://www.youtube.com/watch?v={video_id}",
-                "title": item.get("title", ""),
-                "channel": item.get("channel") or item.get("uploader") or "",
-                "channel_id": item.get("channel_id") or "",
-                "duration": item.get("duration"),
-                "view_count": item.get("view_count") or 0,
-                "upload_date": str(item.get("upload_date") or ""),
-                "license": item.get("license") or "",
-                "keyword": keyword,
-            }
-        )
-    if result.returncode != 0 and not candidates:
-        raise RuntimeError(result.stdout)
+    errors: list[str] = []
+    for result in results:
+        if result.returncode != 0:
+            errors.append(result.stdout)
+        for line in result.stdout.splitlines():
+            if not line.strip().startswith("{"):
+                continue
+            item = json.loads(line)
+            video_id = item.get("id") or video_id_from_url(item.get("webpage_url", ""))
+            if not video_id:
+                continue
+            candidates.append(
+                {
+                    "id": video_id,
+                    "url": item.get("webpage_url") or f"https://www.youtube.com/watch?v={video_id}",
+                    "title": item.get("title", ""),
+                    "channel": item.get("channel") or item.get("uploader") or "",
+                    "channel_id": item.get("channel_id") or "",
+                    "duration": item.get("duration"),
+                    "view_count": item.get("view_count") or 0,
+                    "upload_date": str(item.get("upload_date") or ""),
+                    "license": item.get("license") or "",
+                    "keyword": keyword,
+                }
+            )
+    if errors and not candidates:
+        raise RuntimeError("\n".join(errors))
     return candidates
 
 

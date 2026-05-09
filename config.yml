@@ -34,40 +34,31 @@ bilibili:
 
 search:
   max_uploads_per_run: 1
-  max_candidates_per_keyword: 12
+  max_candidates_per_keyword: 25
   keywords:
+    - "bloxd.io"
+    - "bloxd"
+    - "bloxd.io latest"
+    - "bloxd.io new"
     - "bloxd.io gameplay"
-    - "bloxd.io update"
-    - "bloxd.io tips"
-    - "bloxd.io survival"
-    - "bloxd.io bedwars"
-    - "bloxd.io funny moments"
-    - "bloxd.io best moments"
+    - "bloxd io"
 
 filters:
   min_duration_seconds: 60
-  max_duration_seconds: 1200
-  min_view_count: 300
-  published_within_days: 10
+  max_duration_seconds: 2400
+  min_view_count: 0
+  published_within_days: 30
   # Only YouTube Data API exposes license reliably. yt-dlp search fallback may
   # not return license metadata, so CC filtering can skip otherwise valid videos.
   require_creative_commons: false
-  blocked_words:
-    - "full movie"
-    - "music video"
-    - "unauthorized upload"
-    - "hack"
-    - "hacks"
-    - "cheat"
-    - "cheats"
-    - "mod menu"
-    - "free account"
-    - "giveaway"
+  blocked_words: []
   channel_allowlist: []
   channel_blocklist: []
 
 download:
   max_attempts_per_run: 5
+  preferred_method: ytdown
+  ytdown_api_url: "https://app.ytdown.to/proxy.php"
   js_runtimes: node
   remote_components: ejs:npm
   extractor_args: "youtube:player_client=tv,web"
