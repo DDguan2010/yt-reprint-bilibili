@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -38,6 +39,38 @@ def download_url(url: str, target: Path) -> None:
                     fh.write(chunk)
 
 
+def resolve_ytdown_media_url(media_url: str, timeout_seconds: int = 180) -> str:
+    deadline = time.monotonic() + timeout_seconds
+    last_payload: dict | None = None
+    while time.monotonic() < deadline:
+        response = requests.get(media_url, timeout=60)
+        response.raise_for_status()
+        content_type = response.headers.get("content-type", "").lower()
+        if "application/json" not in content_type and not response.text.lstrip().startswith("{"):
+            return media_url
+
+        payload = response.json()
+        last_payload = payload
+        status = str(payload.get("status", "")).lower()
+        print(f"ytdown worker status: {status or 'unknown'} {payload.get('percent') or payload.get('progress') or ''}".strip())
+        file_url = payload.get("fileUrl")
+        if status == "completed" and file_url and file_url != "Waiting...":
+            return str(file_url)
+        if status in {"failed", "error"}:
+            raise RuntimeError(f"ytdown worker failed: {payload}")
+        time.sleep(5)
+    raise TimeoutError(f"ytdown worker did not complete in time: {last_payload}")
+
+
+def validate_video_file(path: Path, min_size_bytes: int = 1024 * 1024) -> None:
+    if not path.exists() or path.stat().st_size < min_size_bytes:
+        raise RuntimeError(f"downloaded video is too small: {path.stat().st_size if path.exists() else 0} bytes")
+    with path.open("rb") as fh:
+        header = fh.read(32)
+    if b"ftyp" not in header and not header.startswith(b"\x1aE\xdf\xa3"):
+        raise RuntimeError(f"downloaded file is not a recognized video container: header={header!r}")
+
+
 def ytdown_download(item: dict, video_dir: Path, api_url: str) -> dict:
     response = requests.post(api_url, data={"url": item["url"]}, timeout=90)
     response.raise_for_status()
@@ -52,11 +85,12 @@ def ytdown_download(item: dict, video_dir: Path, api_url: str) -> dict:
         raise RuntimeError("ytdown returned no video media items")
     best = max(videos, key=lambda media: parse_resolution(media.get("mediaRes") or media.get("mediaQuality")))
 
-    video_suffix = suffix_from_url(best["mediaUrl"], ".mp4")
+    resolved_video_url = resolve_ytdown_media_url(best["mediaUrl"])
+    video_suffix = suffix_from_url(resolved_video_url, ".mp4")
     video_file = video_dir / f"{item['id']}{video_suffix}"
-    download_url(best["mediaUrl"], video_file)
-    if not video_file.exists() or video_file.stat().st_size == 0:
-        raise RuntimeError("ytdown video download produced an empty file")
+    download_url(resolved_video_url, video_file)
+    validate_video_file(video_file)
+    print(f"ytdown downloaded {video_file} ({video_file.stat().st_size} bytes)")
 
     thumbnail_url = best.get("mediaThumbnail") or api.get("imagePreviewUrl")
     cover_file = ""
