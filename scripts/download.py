@@ -39,7 +39,7 @@ def download_url(url: str, target: Path) -> None:
                     fh.write(chunk)
 
 
-def resolve_ytdown_media_url(media_url: str, timeout_seconds: int = 180) -> str:
+def resolve_ytdown_media_url(media_url: str, timeout_seconds: int = 90) -> str:
     deadline = time.monotonic() + timeout_seconds
     last_payload: dict | None = None
     while time.monotonic() < deadline:
@@ -83,10 +83,23 @@ def normalize_mp4(path: Path) -> Path:
     return normalized
 
 
-def ytdown_download(item: dict, video_dir: Path, api_url: str) -> dict:
-    response = requests.post(api_url, data={"url": item["url"]}, timeout=90)
-    response.raise_for_status()
-    payload = response.json()
+def ytdown_api_request(api_url: str, url: str, retries: int) -> dict:
+    last_error: Exception | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            response = requests.post(api_url, data={"url": url}, timeout=90)
+            response.raise_for_status()
+            return response.json()
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            print(f"ytdown proxy attempt {attempt}/{retries} failed: {exc}")
+            if attempt < retries:
+                time.sleep(10 * attempt)
+    raise RuntimeError(f"ytdown proxy failed after {retries} attempts: {last_error}")
+
+
+def ytdown_download(item: dict, video_dir: Path, api_url: str, worker_timeout_seconds: int, proxy_retries: int) -> dict:
+    payload = ytdown_api_request(api_url, item["url"], proxy_retries)
     api = payload.get("api", {})
     if api.get("status") != "ok":
         raise RuntimeError(f"ytdown returned status {api.get('status')}: {api.get('message')}")
@@ -95,15 +108,31 @@ def ytdown_download(item: dict, video_dir: Path, api_url: str) -> dict:
     videos = [media for media in media_items if str(media.get("type", "")).lower() == "video" and media.get("mediaUrl")]
     if not videos:
         raise RuntimeError("ytdown returned no video media items")
-    best = max(videos, key=lambda media: parse_resolution(media.get("mediaRes") or media.get("mediaQuality")))
+    videos.sort(key=lambda media: parse_resolution(media.get("mediaRes") or media.get("mediaQuality")), reverse=True)
 
-    resolved_video_url = resolve_ytdown_media_url(best["mediaUrl"])
-    video_suffix = suffix_from_url(resolved_video_url, ".mp4")
-    video_file = video_dir / f"{item['id']}{video_suffix}"
-    download_url(resolved_video_url, video_file)
-    validate_video_file(video_file)
-    video_file = normalize_mp4(video_file)
-    print(f"ytdown downloaded {video_file} ({video_file.stat().st_size} bytes)")
+    last_error: Exception | None = None
+    best: dict | None = None
+    video_file: Path | None = None
+    for media in videos:
+        quality = media.get("mediaQuality") or media.get("mediaRes") or "unknown"
+        try:
+            print(f"trying ytdown media quality: {quality}")
+            resolved_video_url = resolve_ytdown_media_url(media["mediaUrl"], timeout_seconds=worker_timeout_seconds)
+            video_suffix = suffix_from_url(resolved_video_url, ".mp4")
+            candidate_file = video_dir / f"{item['id']}.{quality}.{video_suffix.lstrip('.')}"
+            download_url(resolved_video_url, candidate_file)
+            validate_video_file(candidate_file)
+            video_file = normalize_mp4(candidate_file)
+            best = media
+            print(f"ytdown downloaded {video_file} ({video_file.stat().st_size} bytes)")
+            break
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            print(f"ytdown media quality {quality} failed: {exc}")
+            continue
+
+    if not video_file or not best:
+        raise RuntimeError(f"all ytdown media qualities failed: {last_error}")
 
     thumbnail_url = best.get("mediaThumbnail") or api.get("imagePreviewUrl")
     cover_file = ""
@@ -193,6 +222,8 @@ def main() -> None:
     youtube_cookie_file = root_path(runtime.get("youtube_cookie_file", "youtube-cookies.txt"))
     ytdown_api_url = str(download_cfg.get("ytdown_api_url", "https://app.ytdown.to/proxy.php"))
     preferred_method = str(download_cfg.get("preferred_method", "ytdown"))
+    ytdown_worker_timeout_seconds = int(download_cfg.get("ytdown_worker_timeout_seconds", 90))
+    ytdown_proxy_retries = int(download_cfg.get("ytdown_proxy_retries", 3))
 
     downloaded: list[dict] = []
     failures: list[dict] = []
@@ -208,7 +239,7 @@ def main() -> None:
         for method in methods:
             try:
                 if method == "ytdown":
-                    item = ytdown_download(item, video_dir, ytdown_api_url)
+                    item = ytdown_download(item, video_dir, ytdown_api_url, ytdown_worker_timeout_seconds, ytdown_proxy_retries)
                 else:
                     item = ytdlp_download(item, video_dir, config, archive_file, youtube_cookie_file)
                 downloaded.append(item)

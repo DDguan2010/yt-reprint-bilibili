@@ -57,9 +57,11 @@ filters:
   channel_blocklist: []
 
 download:
-  max_attempts_per_run: 5
+  max_attempts_per_run: 10
   preferred_method: ytdown
   ytdown_api_url: "https://app.ytdown.to/proxy.php"
+  ytdown_worker_timeout_seconds: 90
+  ytdown_proxy_retries: 3
   js_runtimes: node
   remote_components: ejs:npm
   extractor_args: "youtube:player_client=tv,web"
