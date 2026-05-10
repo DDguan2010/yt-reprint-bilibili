@@ -58,19 +58,9 @@ filters:
 
 download:
   max_attempts_per_run: 10
-  preferred_method: ytdown
   ytdown_api_url: "https://app.ytdown.to/proxy.php"
   ytdown_worker_timeout_seconds: 90
   ytdown_proxy_retries: 3
-  js_runtimes: node
-  remote_components: ejs:npm
-  extractor_args: "youtube:player_client=tv,web"
-  # Download the best available video and audio, then merge with ffmpeg.
-  format: "bv*+ba/b"
-  subtitle_languages:
-    - en
-    - zh-Hans
-  write_thumbnail: true
   merge_output_format: mp4
 
 runtime:
