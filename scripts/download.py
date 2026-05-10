@@ -71,6 +71,18 @@ def validate_video_file(path: Path, min_size_bytes: int = 1024 * 1024) -> None:
         raise RuntimeError(f"downloaded file is not a recognized video container: header={header!r}")
 
 
+def normalize_mp4(path: Path) -> Path:
+    if path.suffix.lower() != ".mp4":
+        return path
+    normalized = path.with_name(f"{path.stem}.normalized.mp4")
+    result = run_command(["ffmpeg", "-y", "-i", str(path), "-c", "copy", "-movflags", "+faststart", str(normalized)])
+    if result.returncode != 0:
+        print(f"ffmpeg remux failed, using original file: {result.stdout[-2000:]}")
+        return path
+    validate_video_file(normalized)
+    return normalized
+
+
 def ytdown_download(item: dict, video_dir: Path, api_url: str) -> dict:
     response = requests.post(api_url, data={"url": item["url"]}, timeout=90)
     response.raise_for_status()
@@ -90,6 +102,7 @@ def ytdown_download(item: dict, video_dir: Path, api_url: str) -> dict:
     video_file = video_dir / f"{item['id']}{video_suffix}"
     download_url(resolved_video_url, video_file)
     validate_video_file(video_file)
+    video_file = normalize_mp4(video_file)
     print(f"ytdown downloaded {video_file} ({video_file.stat().st_size} bytes)")
 
     thumbnail_url = best.get("mediaThumbnail") or api.get("imagePreviewUrl")

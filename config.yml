@@ -24,6 +24,7 @@ bilibili:
   # {cookie_file}, {video_file}, {title}, {desc}, {source}, {tid}, {tags}, {cover_file}
   upload_command_template: >-
     biliup -u {cookie_file} upload {video_file}
+    --submit web
     --copyright {copyright}
     --source {source}
     --tid {tid}

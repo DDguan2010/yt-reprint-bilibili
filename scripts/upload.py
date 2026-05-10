@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shlex
+import time
 from pathlib import Path
 
 from common import fail_with_log, load_config, read_json, root_path, run_command, sanitize_text, write_json, write_text
@@ -41,6 +42,22 @@ def build_command(template: str, values: dict[str, str]) -> list[str]:
         **{key: str(value) if key.endswith("_arg") else shlex.quote(str(value)) for key, value in values.items()}
     )
     return shlex.split(rendered)
+
+
+def run_upload_with_retries(command: list[str], retries: int = 3) -> tuple[bool, str]:
+    outputs: list[str] = []
+    for attempt in range(1, retries + 1):
+        print(f"biliup upload attempt {attempt}/{retries}")
+        result = run_command(command)
+        output = result.stdout or ""
+        outputs.append(f"--- attempt {attempt}, exit {result.returncode} ---\n{output}")
+        if output.strip():
+            print(output[-4000:])
+        if result.returncode == 0:
+            return True, "\n".join(outputs)
+        if attempt < retries:
+            time.sleep(20 * attempt)
+    return False, "\n".join(outputs)
 
 
 def main() -> None:
@@ -88,10 +105,18 @@ def main() -> None:
             results.append({**result_payload, "ok": True, "output": "dry run"})
             continue
 
-        result = run_command(command)
-        if result.returncode != 0:
-            fail_with_log(config, f"biliup upload failed for {item.get('id')}", {"output": result.stdout[-4000:]})
-        results.append({**result_payload, "ok": True, "output": result.stdout[-4000:]})
+        ok, output = run_upload_with_retries(command)
+        if not ok and cover_file:
+            print("biliup upload failed with cover; retrying once without cover")
+            no_cover_values = {**values, "cover_file": "", "cover_arg": ""}
+            no_cover_command = build_command(str(bili_cfg.get("upload_command_template")), no_cover_values)
+            ok, no_cover_output = run_upload_with_retries(no_cover_command, retries=1)
+            output = f"{output}\n--- retry without cover ---\n{no_cover_output}"
+            result_payload["fallback_command"] = no_cover_command
+        if not ok:
+            print(output[-8000:])
+            fail_with_log(config, f"biliup upload failed for {item.get('id')}", {"output": output[-8000:]})
+        results.append({**result_payload, "ok": True, "output": output[-4000:]})
 
     write_json(runtime.get("upload_result_file", "data/upload-result.json"), results)
     write_json(runtime.get("latest_log_file", "logs/latest.json"), {"ok": True, "stage": "upload", "results": results})
