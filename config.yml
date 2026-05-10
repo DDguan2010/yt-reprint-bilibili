@@ -59,7 +59,7 @@ filters:
 download:
   max_attempts_per_run: 10
   ytdown_api_url: "https://app.ytdown.to/proxy.php"
-  ytdown_worker_timeout_seconds: 600
+  ytdown_worker_timeout_seconds: 90
   ytdown_proxy_retries: 3
   merge_output_format: mp4
 
